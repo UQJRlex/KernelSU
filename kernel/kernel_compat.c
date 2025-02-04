@@ -77,6 +77,24 @@ void ksu_android_ns_fs_check()
 	task_unlock(current);
 }
 
+struct file *ksu_filp_open_compat(const char *filename, int flags, umode_t mode)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_IS_HW_HISI)
+	if (init_session_keyring != NULL && !current_cred()->session_keyring &&
+	    (current->flags & PF_WQ_WORKER)) {
+		pr_info("installing init session keyring for older kernel\n");
+		install_session_keyring(init_session_keyring);
+	}
+#endif
+	// switch mnt_ns even if current is not wq_worker, to ensure what we open is the correct file in android mnt_ns, rather than user created mnt_ns
+	struct ksu_ns_fs_saved saved;
+	if (android_context_saved_enabled) {
+		pr_info("start switch current nsproxy and fs to android context\n");
+		task_lock(current);
+		ksu_save_ns_fs(&saved);
+		ksu_load_ns_fs(&android_context_saved);
+		task_unlock(current);
+	}
 	struct file *fp = filp_open(filename, flags, mode);
 	if (android_context_saved_enabled) {
 		task_lock(current);
