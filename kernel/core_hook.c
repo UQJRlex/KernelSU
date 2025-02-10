@@ -1262,7 +1262,7 @@ void __init ksu_core_init(void)
 
 void ksu_core_exit(void)
 {
-#if defined(CONFIG_KPROBES) && 0
+#ifdef CONFIG_KPROBES
 	pr_info("ksu_core_kprobe_exit\n");
 	// we dont use this now
 	// ksu_kprobe_exit();
