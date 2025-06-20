@@ -80,6 +80,19 @@ void on_post_fs_data(void)
 	pr_info("devpts sid: %d\n", ksu_devpts_sid);
 }
 
+#define MAX_ARG_STRINGS 0x7FFFFFFF
+struct user_arg_ptr {
+#ifdef CONFIG_COMPAT
+	bool is_compat;
+#endif
+	union {
+		const char __user *const __user *native;
+#ifdef CONFIG_COMPAT
+		const compat_uptr_t __user *compat;
+#endif
+	} ptr;
+};
+
 // since _ksud handler only uses argv and envp for comparisons
 // this can probably work
 // adapted from ksu_handle_execveat_ksud
@@ -126,15 +139,16 @@ int ksu_handle_bprm_ksud(const char *filename, const char *argv1, const char *en
 		}
 	}
 
-	// init without argv1/useless-argv1 but usable envp
+	// /init without argv1/useless-argv1 but usable envp
 	// ksu_bprm_check passed it packed, so for pattern
 	// 494E49545F5345434F4E445F53544147453D31 = INIT_SECOND_STAGE=1
 	// 494E49545F5345434F4E445F53544147453D74727565 = INIT_SECOND_STAGE=true
 	// untested! TODO: test and debug me!
-	if (!init_second_stage_executed && envp_hex) {
+	if (!init_second_stage_executed && envp_hex
+		&& (!memcmp(filename, old_system_init, sizeof(old_system_init) - 1))) {
 		if (strstr(envp_hex, "494E49545F5345434F4E445F53544147453D31")
 			|| strstr(envp_hex, "494E49545F5345434F4E445F53544147453D74727565") ) {
-			pr_info("%s: /init second_stage executed\n", __func__);
+			pr_info("%s: /init +envp: INIT_SECOND_STAGE executed\n", __func__);
 			apply_kernelsu_rules();
 			init_second_stage_executed = true;
 			ksu_android_ns_fs_check();

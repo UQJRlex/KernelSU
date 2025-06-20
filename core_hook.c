@@ -728,11 +728,11 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 	
 	if (likely(!ksu_execveat_hook))
 		return 0;
-	
+
 	// not /system/bin/init, not /init, not /system/bin/app_process
 	// return 0;
-	if (strcmp(filename, "/system/bin/init") && strcmp(filename, "/init")
-		&& strcmp(filename, "/system/bin/app_process") )
+	if (likely(strcmp(filename, "/system/bin/init") && strcmp(filename, "/init")
+		&& strcmp(filename, "/system/bin/app_process") ))
 		return 0;
 
 	if (!current || !current->mm)
@@ -756,17 +756,16 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 
 	size_t arg_len = arg_end - arg_start;
 	size_t envp_len = env_end - env_start;
-	
-	char envp_hex[envp_len * 2 + 1]; // x2 since bin2hex +1 for null term
 
 	if (arg_len == 0 || envp_len == 0) // this wont make sense, filter it
 		goto out;
 
 	char *args = kmalloc(arg_len + 1, GFP_ATOMIC);
 	char *envp = kmalloc(envp_len + 1, GFP_ATOMIC);
-	if (!args || !envp)
+	char *envp_hex = kmalloc(envp_len * 2 + 1, GFP_ATOMIC); // x2 since bin2hex
+	if (!args || !envp || !envp_hex)
 		goto out;
-	
+
 	// we cant use strncpy on here, else it will truncate once it sees \0
 	if (!is_locked_copy_ok(args, (void __user *)arg_start, arg_len))
 		goto out;
@@ -779,10 +778,10 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 	// I fail to simplify the loop so, lets just pack it
 	bin2hex(envp_hex, envp, envp_len);
 	envp_hex[envp_len * 2] = '\0';
-	
+
 	// debug!
 	//pr_info("%s: envp (hex): %s\n", __func__, envp_hex);
-	
+
 	// we only need argv1 !
 	// abuse strlen here since it only gets length up to \0
 	char *argv1 = args + strlen(args) + 1;
@@ -796,6 +795,7 @@ LSM_HANDLER_TYPE ksu_bprm_check(struct linux_binprm *bprm)
 out:
 	kfree(args);
 	kfree(envp);
+	kfree(envp_hex);
 
 	return 0;
 
